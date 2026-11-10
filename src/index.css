@@ -1,8 +1,0 @@
-@import './styles/design-system.css';
-
-#root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}

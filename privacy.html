@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - Omaglee</title>
+  <link rel="icon" type="image/webp" href="public/omaglee.webp" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="theme-light">
+  <div class="content-page-shell">
+    <header class="cyber-navbar">
+      <div class="nav-left">
+        <a href="/" class="brand-logo-wrap" style="text-decoration: none; color: inherit;">
+          <img src="public/omaglee.webp" alt="Omaglee Logo" class="brand-logo-img" />
+          <span class="brand-title">Omaglee</span>
+        </a>
+      </div>
+      <div class="nav-right">
+        <a href="/" class="cta-btn-primary" style="padding: 0.5rem 1.25rem; font-size: 0.88rem;">Back to Chat</a>
+      </div>
+    </header>
+
+    <main class="content-container">
+      <div class="content-header">
+        <div class="content-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <span>Privacy & Data Architecture</span>
+        </div>
+        <h1 class="content-title">Privacy Policy</h1>
+        <p class="content-lead">
+          Our architectural philosophy is simple: minimize data retention, encrypt communication, and prioritize user privacy.
+        </p>
+      </div>
+
+      <div class="legal-body">
+        <section class="legal-section">
+          <h2>1. Introduction</h2>
+          <p>
+            This Privacy Policy describes how Omaglee handles information when you use our website, client interfaces, and real-time random video chat services.
+          </p>
+        </section>
+
+        <section class="legal-section">
+          <h2>2. Ephemeral Media & Peer-to-Peer Streams</h2>
+          <p>
+            Video chats are established as peer-to-peer (P2P) connections using WebRTC encryption. Audio and video streams flow directly between participants. Omaglee does not record, intercept, or store your video or audio conversations.
+          </p>
+          <div class="callout-box callout-box-success">
+            <strong>Ephemeral Sessions:</strong> Once a call ends or you skip to the next stranger, the connection is torn down immediately. No video logs exist on our servers.
+          </div>
+        </section>
+
+        <section class="legal-section">
+          <h2>3. Camera & Microphone Permissions</h2>
+          <p>
+            Your browser requests explicit hardware permission to access your camera and microphone. These permissions remain under your local control. You can mute your microphone or turn off your camera at any moment using the on-screen dock controls.
+          </p>
+        </section>
+
+        <section class="legal-section">
+          <h2>4. Relay-Only Privacy Mode</h2>
+          <p>
+            By default, WebRTC connections exchange direct IP addresses between peers to establish the lowest-latency connection. If you prefer not to expose your IP address to strangers, you can enable <strong>Relay-Only Privacy Mode</strong> in the Settings modal, which routes all media strictly through our secure TURN relay servers.
+          </p>
+        </section>
+
+        <section class="legal-section">
+          <h2>5. Safety Reports & Moderation Logs</h2>
+          <p>
+            When a user reports a violation, our server logs the anonymous participant session identifier, reported reason, and timestamp solely for investigating abuse and enforcing permanent platform bans.
+          </p>
+        </section>
+      </div>
+
+      <div class="content-footer-cta">
+        <a href="/" class="cta-btn-primary">Back to Video Chat</a>
+        <a href="terms.html" class="cta-btn-secondary">Terms of Service</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
