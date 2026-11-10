@@ -5,7 +5,10 @@
 import { AppState, DOMElements, MatchData, SignalingMessage } from '../types';
 import { API_URL, DEFAULT_ICE_SERVERS } from '../config';
 import { setCallState, showToast } from './ui';
-import { startHeartbeat } from './matchmaking';
+import { startHeartbeat, stopWaitingTimer, stopPolling } from './matchmaking';
+
+// Queue for ICE candidates arriving before remote description is set
+let pendingCandidates: RTCIceCandidateInit[] = [];
 
 export function connectMatchedStranger(
   state: AppState,
@@ -17,6 +20,10 @@ export function connectMatchedStranger(
 ): void {
   state.activeMatch = matchData;
   state.processedMsgIds.clear();
+  pendingCandidates = [];
+
+  stopWaitingTimer(state);
+  stopPolling(state);
   setCallState(state, el, 'CONNECTING');
 
   clearChatMessages();
@@ -32,32 +39,50 @@ export function connectMatchedStranger(
   const pc = new RTCPeerConnection(config);
   state.peerConnection = pc;
 
+  // Connection state change listener
+  pc.onconnectionstatechange = () => {
+    console.log('[WebRTC] Connection state:', pc.connectionState);
+    if (pc.connectionState === 'connected') {
+      setCallState(state, el, 'CONNECTED');
+    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      showToast(el, 'Connection lost with stranger.', 'neutral');
+      onDisconnect();
+    }
+  };
+
+  // Attach local media stream tracks
   if (state.localStream) {
     state.localStream.getTracks().forEach(track => {
       pc.addTrack(track, state.localStream!);
     });
   }
 
+  // Handle remote video & audio tracks
   pc.ontrack = (event) => {
-    state.remoteStream = event.streams[0];
-    if (el.remoteVideo) {
-      el.remoteVideo.srcObject = event.streams[0];
+    console.log('[WebRTC] Received remote track:', event.track.kind);
+    if (event.streams && event.streams[0]) {
+      state.remoteStream = event.streams[0];
+      if (el.remoteVideo) {
+        el.remoteVideo.srcObject = event.streams[0];
+      }
     }
     setCallState(state, el, 'CONNECTED');
   };
 
+  // Send local ICE candidates to remote peer via signaling
   pc.onicecandidate = (event) => {
     if (event.candidate && state.activeMatch?.matchId) {
-      sendSignalingMessage(state, 'candidate', { candidate: event.candidate });
+      sendSignalingMessage(state, 'candidate', { candidate: event.candidate.toJSON() });
     }
   };
 
+  // Data Channel for real-time text chat
   if (matchData.role === 'initiator') {
     const dc = pc.createDataChannel('chat', { ordered: true });
     setupDataChannel(state, el, dc, appendChatMessage);
     state.dataChannel = dc;
 
-    pc.createOffer()
+    pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
       .then(offer => pc.setLocalDescription(offer))
       .then(() => {
         if (pc.localDescription) {
@@ -78,13 +103,15 @@ export function connectMatchedStranger(
 }
 
 export function setupDataChannel(
-  _state: AppState,
+  state: AppState,
   el: DOMElements,
   dc: RTCDataChannel,
   appendChatMessage: (sender: string, text: string) => void
 ): void {
   dc.onopen = () => {
+    console.log('[WebRTC] DataChannel open (P2P connected)');
     if (el.signalingStatusText) el.signalingStatusText.textContent = 'Connected (P2P)';
+    setCallState(state, el, 'CONNECTED');
   };
   dc.onmessage = (event) => {
     try {
@@ -137,11 +164,12 @@ export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnec
       const data = await res.json();
       const messages: SignalingMessage[] = data.messages || [];
 
+      // Process messages sequentially in arrival order
       for (const msg of messages) {
         if (msg.id && state.processedMsgIds.has(msg.id)) continue;
         if (msg.id) state.processedMsgIds.add(msg.id);
 
-        handleIncomingSignalingMessage(state, el, msg, onDisconnect);
+        await handleIncomingSignalingMessage(state, el, msg, onDisconnect);
       }
     } catch {
       // transient network poll drop
@@ -162,6 +190,15 @@ export async function handleIncomingSignalingMessage(
     try {
       const sdp = msg.payload?.sdp || msg.sdp;
       await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+
+      // Drain queued ICE candidates
+      while (pendingCandidates.length > 0) {
+        const candidate = pendingCandidates.shift();
+        if (candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('Queued candidate error:', e));
+        }
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await sendSignalingMessage(state, 'answer', { sdp: answer.sdp });
@@ -173,6 +210,14 @@ export async function handleIncomingSignalingMessage(
       const sdp = msg.payload?.sdp || msg.sdp;
       if (pc.signalingState !== 'stable') {
         await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+
+        // Drain queued ICE candidates
+        while (pendingCandidates.length > 0) {
+          const candidate = pendingCandidates.shift();
+          if (candidate) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.warn('Queued candidate error:', e));
+          }
+        }
       }
     } catch (err) {
       console.error('Handle answer error:', err);
@@ -181,12 +226,17 @@ export async function handleIncomingSignalingMessage(
     try {
       const candidate = msg.payload?.candidate || msg.candidate;
       if (candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } else {
+          // Remote description not ready yet -> buffer candidate
+          pendingCandidates.push(candidate);
+        }
       }
     } catch (err) {
       console.warn('Add ICE candidate error:', err);
     }
-  } else if (msg.type === 'leave' || msg.type === 'disconnect') {
+  } else if (msg.type === 'leave' || msg.type === 'disconnect' || msg.type === 'match.ended') {
     showToast(el, 'Stranger disconnected or stopped call.');
     onDisconnect();
   }
@@ -194,6 +244,8 @@ export async function handleIncomingSignalingMessage(
 
 export function closePeerConnection(state: AppState, el: DOMElements): void {
   stopSignalingPoll(state);
+  pendingCandidates = [];
+
   if (state.dataChannel) {
     try { state.dataChannel.close(); } catch {}
     state.dataChannel = null;

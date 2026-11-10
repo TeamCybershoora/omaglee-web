@@ -31,7 +31,9 @@ export function startWaitingTimer(state: AppState, el: DOMElements): void {
 
   state.waitingTimer = setInterval(() => {
     state.waitingSeconds++;
-    if (el.searchingTimer) el.searchingTimer.textContent = `${state.waitingSeconds}s`;
+    if (el.searchingTimer) {
+      el.searchingTimer.textContent = `${state.waitingSeconds}s`;
+    }
   }, 1000);
 }
 
@@ -47,7 +49,6 @@ export function stopPolling(state: AppState): void {
     clearInterval(state.pollTimer as any);
     state.pollTimer = null;
   }
-  stopWaitingTimer(state);
 }
 
 export function stopHeartbeat(state: AppState): void {
@@ -79,12 +80,14 @@ export async function handleStartChatting(
   el: DOMElements,
   connectMatchedStranger: (matchData: MatchData) => void
 ): Promise<void> {
-  if (!state.localStream) {
-    await startLocalPreview(state, el);
-  }
-
+  // 1. Immediately reflect SEARCHING state and begin waiting timer
   setCallState(state, el, 'SEARCHING');
   startWaitingTimer(state, el);
+
+  // 2. Start camera in background if not already active
+  if (!state.localStream) {
+    startLocalPreview(state, el).catch(() => {});
+  }
 
   try {
     await ensureSession(state);
@@ -99,14 +102,16 @@ export async function handleStartChatting(
     const data = await res.json();
 
     if (data.status === 'matched' && data.matchId && data.role) {
+      stopWaitingTimer(state);
       connectMatchedStranger(data);
     } else {
       startPollingQueue(state, el, connectMatchedStranger);
     }
   } catch (err) {
     console.error('Queue error:', err);
+    stopWaitingTimer(state);
     setCallState(state, el, 'IDLE');
-    showToast(el, 'Unable to connect to matchmaking server.', 'error');
+    showToast(el, 'Unable to connect to matchmaking server. Please retry.', 'error');
   }
 }
 
@@ -117,6 +122,12 @@ export function startPollingQueue(
 ): void {
   stopPolling(state);
   state.pollTimer = setInterval(async () => {
+    // If user stopped or match already connected, stop polling
+    if (state.callState !== 'SEARCHING') {
+      stopPolling(state);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_URL}/matchmaking/status`, {
         headers: {
@@ -128,10 +139,14 @@ export function startPollingQueue(
 
       if (data.status === 'matched' && data.matchId && data.role) {
         stopPolling(state);
+        stopWaitingTimer(state);
         connectMatchedStranger(data);
       } else if (data.status === 'idle') {
+        // Queue search expired on server
         stopPolling(state);
+        stopWaitingTimer(state);
         setCallState(state, el, 'IDLE');
+        showToast(el, 'Search timed out. Click Start Call to search again.', 'neutral');
       }
     } catch (err) {
       console.warn('Status poll error:', err);
@@ -178,11 +193,13 @@ export async function handleNextStranger(
     const data = await res.json();
 
     if (data.status === 'matched' && data.matchId && data.role) {
+      stopWaitingTimer(state);
       connectMatchedStranger(data);
     } else {
       startPollingQueue(state, el, connectMatchedStranger);
     }
   } catch {
+    stopWaitingTimer(state);
     setCallState(state, el, 'IDLE');
     showToast(el, 'Could not search for next stranger. Try again.', 'error');
   }
@@ -194,6 +211,7 @@ export function handleStopCall(
   closePeerConnection: () => void
 ): void {
   stopPolling(state);
+  stopWaitingTimer(state);
   stopHeartbeat(state);
   closePeerConnection();
 
