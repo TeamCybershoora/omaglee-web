@@ -3,7 +3,7 @@
  */
 
 import { AppState, DOMElements } from '../types';
-import { showToast } from './ui';
+import { showToast, applyMirrorSetting } from './ui';
 
 function createSyntheticVideoStream(): MediaStreamTrack {
   const canvas = document.createElement('canvas');
@@ -62,22 +62,35 @@ export async function startLocalPreview(state: AppState, el: DOMElements): Promi
     if (el.localVideo && el.localVideo.srcObject !== state.localStream) {
       el.localVideo.srcObject = state.localStream;
     }
+    applyMirrorSetting(state, el);
     return;
   }
 
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const videoConstraint: boolean | MediaTrackConstraints = state.selectedCameraId
+        ? { deviceId: { exact: state.selectedCameraId } }
+        : true;
+      const audioConstraint: boolean | MediaTrackConstraints = state.selectedMicId
+        ? { deviceId: { exact: state.selectedMicId } }
+        : true;
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: videoConstraint,
+        audio: audioConstraint
       });
+      stream.getAudioTracks().forEach(t => { t.enabled = !state.isAudioMuted; });
+      stream.getVideoTracks().forEach(t => { t.enabled = !state.isVideoMuted; });
+
       state.localStream = stream;
       if (el.localVideo) {
         el.localVideo.srcObject = stream;
       }
+      applyMirrorSetting(state, el);
       if (el.requestPermsBtn) {
         el.requestPermsBtn.style.display = 'none';
       }
+      updateMediaButtonStates(state, el);
       return;
     }
   } catch (err: any) {
@@ -85,21 +98,28 @@ export async function startLocalPreview(state: AppState, el: DOMElements): Promi
 
     // Try fallback for multi-tab testing on the same machine (where webcam is already locked)
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+      const audioConstraint: boolean | MediaTrackConstraints = state.selectedMicId
+        ? { deviceId: { exact: state.selectedMicId } }
+        : true;
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint }).catch(() => null);
       const videoTrack = createSyntheticVideoStream();
       const combinedStream = new MediaStream();
       combinedStream.addTrack(videoTrack);
       if (audioStream) {
         audioStream.getAudioTracks().forEach(t => combinedStream.addTrack(t));
       }
+      combinedStream.getAudioTracks().forEach(t => { t.enabled = !state.isAudioMuted; });
+      combinedStream.getVideoTracks().forEach(t => { t.enabled = !state.isVideoMuted; });
 
       state.localStream = combinedStream;
       if (el.localVideo) {
         el.localVideo.srcObject = combinedStream;
       }
+      applyMirrorSetting(state, el);
       if (el.requestPermsBtn) {
         el.requestPermsBtn.style.display = 'none';
       }
+      updateMediaButtonStates(state, el);
       showToast(el, 'Webcam busy in another tab; using virtual camera fallback.', 'neutral');
       return;
     } catch {
@@ -110,12 +130,67 @@ export async function startLocalPreview(state: AppState, el: DOMElements): Promi
       if (el.localVideo) {
         el.localVideo.srcObject = combinedStream;
       }
+      applyMirrorSetting(state, el);
     }
 
     if (el.requestPermsBtn) {
       el.requestPermsBtn.style.display = 'inline-flex';
     }
   }
+}
+
+export async function populateMediaDevices(state: AppState, el: DOMElements): Promise<void> {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+    const mics = devices.filter(d => d.kind === 'audioinput');
+
+    const activeCamId = state.localStream?.getVideoTracks()[0]?.getSettings?.().deviceId || state.selectedCameraId;
+    const activeMicId = state.localStream?.getAudioTracks()[0]?.getSettings?.().deviceId || state.selectedMicId;
+
+    if (el.cameraSelect) {
+      el.cameraSelect.innerHTML = '';
+      if (cameras.length === 0) {
+        el.cameraSelect.add(new Option('No Camera Detected', ''));
+      } else {
+        cameras.forEach((cam, idx) => {
+          const opt = new Option(cam.label || `Camera ${idx + 1}`, cam.deviceId);
+          if (cam.deviceId === activeCamId) opt.selected = true;
+          el.cameraSelect!.add(opt);
+        });
+      }
+    }
+
+    if (el.micSelect) {
+      el.micSelect.innerHTML = '';
+      if (mics.length === 0) {
+        el.micSelect.add(new Option('No Microphone Detected', ''));
+      } else {
+        mics.forEach((mic, idx) => {
+          const opt = new Option(mic.label || `Microphone ${idx + 1}`, mic.deviceId);
+          if (mic.deviceId === activeMicId) opt.selected = true;
+          el.micSelect!.add(opt);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Enumerate devices error:', err);
+  }
+}
+
+export async function switchMediaDevices(state: AppState, el: DOMElements): Promise<void> {
+  if (state.isScreenSharing) {
+    showToast(el, 'Device preference saved. It will apply when screen share ends.', 'neutral');
+    return;
+  }
+  if (state.localStream) {
+    state.localStream.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+  }
+  await startLocalPreview(state, el);
+  await replaceOutgoingTracks(state, state.localStream);
+  showToast(el, 'Camera / microphone updated.', 'success');
 }
 
 export function toggleAudio(state: AppState, el: DOMElements): void {
@@ -204,6 +279,7 @@ export async function toggleScreenShare(state: AppState, el: DOMElements): Promi
     state.localStream = nextStream;
     if (el.localVideo) el.localVideo.srcObject = nextStream;
     state.isScreenSharing = true;
+    applyMirrorSetting(state, el);
 
     await replaceOutgoingTracks(state, nextStream);
 

@@ -312,7 +312,7 @@
           </button>
 
           <!-- Call Settings -->
-          <button type="button" id="dock-settings-btn" class="dock-circle-btn" onclick="document.getElementById('settings-modal').style.display='flex'" title="Settings">
+          <button type="button" id="dock-settings-btn" class="dock-circle-btn" title="Settings">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </button>
 
@@ -412,23 +412,54 @@
           <button type="button" id="close-settings-btn" class="modal-close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="settings-toggle-row">
+          <div class="settings-device-group">
+            <label for="settings-camera-select" class="report-label">Camera</label>
+            <select id="settings-camera-select" class="report-select-input">
+              <option value="">Default Camera</option>
+            </select>
+          </div>
+          <div class="settings-device-group" style="margin-top: 0.75rem;">
+            <label for="settings-mic-select" class="report-label">Microphone</label>
+            <select id="settings-mic-select" class="report-select-input">
+              <option value="">Default Microphone</option>
+            </select>
+          </div>
+          <div class="settings-toggle-row" style="margin-top: 1rem;">
+            <div class="settings-text-col">
+              <strong>Mirror My Video</strong>
+              <p>Flip your self-preview horizontally like a mirror.</p>
+            </div>
+            <button type="button" id="mirror-video-switch" class="settings-toggle-switch active">
+              <span id="mirror-status-text">ON</span>
+            </button>
+          </div>
+          <div class="settings-toggle-row" style="margin-top: 0.9rem;">
+            <div class="settings-text-col">
+              <strong>Join Calls Muted</strong>
+              <p>Automatically mute your microphone when starting or joining a call.</p>
+            </div>
+            <button type="button" id="auto-mute-switch" class="settings-toggle-switch">
+              <span id="auto-mute-status-text">OFF</span>
+            </button>
+          </div>
+          <div class="settings-toggle-row" style="margin-top: 0.9rem;">
             <div class="settings-text-col">
               <strong>Relay-Only Privacy Mode</strong>
-              <p>Hide your direct IP address from strangers by routing media strictly through encrypted TURN relay.</p>
+              <p>Route media strictly via TURN relay to mask direct IP when a TURN server is active.</p>
             </div>
             <button type="button" id="privacy-mode-switch" class="settings-toggle-switch">
               <span id="privacy-status-text">OFF</span>
             </button>
           </div>
-          <div class="settings-toggle-row" style="margin-top: 1rem;">
+          <div class="settings-toggle-row" style="margin-top: 0.9rem;">
             <div class="settings-text-col">
-              <strong>Signaling Status</strong>
-              <p>Current P2P state: <span id="signaling-status-text" class="status-code">Standby</span></p>
+              <strong>Connection Status</strong>
+              <p>State: <span id="signaling-status-text" class="status-code">Standby</span> &bull; <span id="signaling-turn-note">Checking relay...</span></p>
             </div>
           </div>
         </div>
         <div class="modal-footer">
+          <button type="button" id="reset-settings-btn" class="btn btn-outline btn-md">Reset Defaults</button>
           <button type="button" id="done-settings-btn" class="btn btn-primary btn-md">Done</button>
         </div>
       </div>

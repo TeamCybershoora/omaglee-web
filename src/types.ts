@@ -47,6 +47,11 @@ export interface AppState {
   isVideoMuted: boolean;
   isScreenSharing: boolean;
   privacyMode: boolean;
+  mirrorVideo: boolean;
+  autoMuteOnJoin: boolean;
+  selectedCameraId: string;
+  selectedMicId: string;
+  turnAvailable: boolean | null;
   onlineCount: number;
   waitingSeconds: number;
   pollTimer: number | null;
@@ -118,11 +123,20 @@ export interface DOMElements {
 
   settingsModal: HTMLElement | null;
   settingsBtn: HTMLElement | null;
+  dockSettingsBtn: HTMLElement | null;
   closeSettingsBtn: HTMLElement | null;
   doneSettingsBtn: HTMLElement | null;
+  resetSettingsBtn: HTMLElement | null;
+  cameraSelect: HTMLSelectElement | null;
+  micSelect: HTMLSelectElement | null;
+  mirrorSwitch: HTMLElement | null;
+  mirrorStatusText: HTMLElement | null;
+  autoMuteSwitch: HTMLElement | null;
+  autoMuteStatusText: HTMLElement | null;
   privacySwitch: HTMLElement | null;
   privacyStatusText: HTMLElement | null;
   signalingStatusText: HTMLElement | null;
+  signalingTurnNote: HTMLElement | null;
 
   aboutModal: HTMLElement | null;
   aboutNavBtn: HTMLElement | null;

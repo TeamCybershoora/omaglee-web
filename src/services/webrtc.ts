@@ -12,7 +12,7 @@ import { startLocalPreview } from './media';
 let pendingCandidates: RTCIceCandidateInit[] = [];
 let disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function fetchIceServers(state: AppState): Promise<RTCIceServer[]> {
+export async function fetchIceServers(state: AppState): Promise<RTCIceServer[]> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
@@ -23,6 +23,7 @@ async function fetchIceServers(state: AppState): Promise<RTCIceServer[]> {
     clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
+      state.turnAvailable = Boolean(data.turnConfigured);
       if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
         return data.iceServers;
       }
@@ -30,6 +31,7 @@ async function fetchIceServers(state: AppState): Promise<RTCIceServer[]> {
   } catch {
     // Fallback cleanly to default STUN servers
   }
+  if (state.turnAvailable === null) state.turnAvailable = false;
   return DEFAULT_ICE_SERVERS;
 }
 
@@ -75,7 +77,7 @@ export async function connectMatchedStranger(
 
   const config: RTCConfiguration = {
     iceServers,
-    iceTransportPolicy: state.privacyMode ? 'relay' : 'all'
+    iceTransportPolicy: state.privacyMode && state.turnAvailable ? 'relay' : 'all'
   };
 
   const pc = new RTCPeerConnection(config);

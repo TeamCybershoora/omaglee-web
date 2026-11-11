@@ -66,11 +66,20 @@ export function getDOMElements(): DOMElements {
 
     settingsModal: document.getElementById('settings-modal'),
     settingsBtn: document.getElementById('settings-btn'),
+    dockSettingsBtn: document.getElementById('dock-settings-btn'),
     closeSettingsBtn: document.getElementById('close-settings-btn'),
     doneSettingsBtn: document.getElementById('done-settings-btn'),
+    resetSettingsBtn: document.getElementById('reset-settings-btn'),
+    cameraSelect: document.getElementById('settings-camera-select') as HTMLSelectElement | null,
+    micSelect: document.getElementById('settings-mic-select') as HTMLSelectElement | null,
+    mirrorSwitch: document.getElementById('mirror-video-switch'),
+    mirrorStatusText: document.getElementById('mirror-status-text'),
+    autoMuteSwitch: document.getElementById('auto-mute-switch'),
+    autoMuteStatusText: document.getElementById('auto-mute-status-text'),
     privacySwitch: document.getElementById('privacy-mode-switch'),
     privacyStatusText: document.getElementById('privacy-status-text'),
     signalingStatusText: document.getElementById('signaling-status-text'),
+    signalingTurnNote: document.getElementById('signaling-turn-note'),
 
     aboutModal: document.getElementById('about-modal'),
     aboutNavBtn: document.getElementById('about-nav-btn'),
@@ -129,6 +138,33 @@ export function toggleTheme(state: AppState, el?: DOMElements): void {
   applyTheme(state, el);
 }
 
+export function applyMirrorSetting(state: AppState, el: DOMElements): void {
+  if (!el.localVideo) return;
+  const shouldMirror = state.mirrorVideo && !state.isScreenSharing;
+  el.localVideo.style.transform = shouldMirror ? 'scaleX(-1)' : 'none';
+}
+
+export function syncSettingsUI(state: AppState, el: DOMElements): void {
+  if (el.mirrorSwitch) el.mirrorSwitch.classList.toggle('active', state.mirrorVideo);
+  if (el.mirrorStatusText) el.mirrorStatusText.textContent = state.mirrorVideo ? 'ON' : 'OFF';
+
+  if (el.autoMuteSwitch) el.autoMuteSwitch.classList.toggle('active', state.autoMuteOnJoin);
+  if (el.autoMuteStatusText) el.autoMuteStatusText.textContent = state.autoMuteOnJoin ? 'ON' : 'OFF';
+
+  if (el.privacySwitch) el.privacySwitch.classList.toggle('active', state.privacyMode);
+  if (el.privacyStatusText) el.privacyStatusText.textContent = state.privacyMode ? 'ON' : 'OFF';
+
+  if (el.signalingTurnNote) {
+    if (state.turnAvailable === null) {
+      el.signalingTurnNote.textContent = 'Checking relay...';
+    } else if (state.turnAvailable) {
+      el.signalingTurnNote.textContent = 'TURN Relay Ready';
+    } else {
+      el.signalingTurnNote.textContent = 'Direct STUN Mode';
+    }
+  }
+}
+
 export function setCallState(state: AppState, el: DOMElements, newState: CallState): void {
   state.callState = newState;
 
@@ -141,6 +177,7 @@ export function setCallState(state: AppState, el: DOMElements, newState: CallSta
     if (el.nextBtn) el.nextBtn.style.display = 'none';
     if (el.stopBtn) el.stopBtn.style.display = 'none';
     if (el.chatStatusBadge) el.chatStatusBadge.textContent = 'Standby';
+    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Standby';
   } else if (newState === 'SEARCHING') {
     if (el.strangerStandby) el.strangerStandby.style.display = 'none';
     if (el.strangerSearching) el.strangerSearching.style.display = 'flex';
@@ -150,12 +187,14 @@ export function setCallState(state: AppState, el: DOMElements, newState: CallSta
     if (el.nextBtn) el.nextBtn.style.display = 'inline-flex';
     if (el.stopBtn) el.stopBtn.style.display = 'inline-flex';
     if (el.chatStatusBadge) el.chatStatusBadge.textContent = 'Searching...';
+    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Searching';
   } else if (newState === 'CONNECTING') {
     if (el.strangerStandby) el.strangerStandby.style.display = 'none';
     if (el.strangerSearching) el.strangerSearching.style.display = 'none';
     if (el.strangerConnecting) el.strangerConnecting.style.display = 'flex';
     if (el.remoteVideo) el.remoteVideo.style.display = 'none';
     if (el.chatStatusBadge) el.chatStatusBadge.textContent = 'Connecting...';
+    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Connecting';
   } else if (newState === 'CONNECTED') {
     if (el.strangerStandby) el.strangerStandby.style.display = 'none';
     if (el.strangerSearching) el.strangerSearching.style.display = 'none';
@@ -165,5 +204,6 @@ export function setCallState(state: AppState, el: DOMElements, newState: CallSta
     if (el.nextBtn) el.nextBtn.style.display = 'inline-flex';
     if (el.stopBtn) el.stopBtn.style.display = 'inline-flex';
     if (el.chatStatusBadge) el.chatStatusBadge.textContent = 'Connected';
+    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Connected';
   }
 }

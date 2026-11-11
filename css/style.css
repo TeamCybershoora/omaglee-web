@@ -2215,3 +2215,27 @@ body.theme-dark .btn-outline {
   color: #f1f5f9;
   border-color: #334155;
 }
+
+body.theme-dark .settings-text-col strong {
+  color: #f8fafc;
+}
+
+body.theme-dark .settings-text-col p {
+  color: #94a3b8;
+}
+
+body.theme-dark .settings-toggle-switch {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+body.theme-dark .settings-toggle-switch.active {
+  background: var(--cyber-orange);
+  border-color: var(--cyber-orange);
+  color: #ffffff;
+}
+
+body.theme-dark .status-code {
+  color: #fb923c;
+}
