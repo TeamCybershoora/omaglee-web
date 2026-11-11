@@ -385,6 +385,36 @@ body {
   color: #ffffff;
 }
 
+.icon-slash {
+  display: none;
+}
+
+.control-btn-muted .icon-slash,
+.video-overlay-icon-btn.active .icon-slash {
+  display: inline;
+  stroke: #ffffff;
+}
+
+.dock-circle-btn.control-btn-muted {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
+.dock-circle-btn.control-btn-muted:hover {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
+
+.dock-circle-btn.control-btn-active {
+  background: linear-gradient(135deg, #ff781f 0%, #ea580c 100%);
+  border-color: #ea580c;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+}
+
 .request-permission-btn {
   position: absolute;
   z-index: 30;
@@ -2033,4 +2063,155 @@ body {
 .cta-btn-secondary:hover {
   background: rgba(99, 102, 241, 0.05);
   border-color: #6366f1;
+}
+
+/* ==========================================================================
+   NIGHT / DARK THEME OVERRIDES
+   ========================================================================== */
+body.theme-dark {
+  --cyber-bg: #0b1120;
+  --cyber-surface: #111827;
+  --cyber-surface-hover: #1e293b;
+  --cyber-card-bg: rgba(17, 24, 39, 0.96);
+  --cyber-border: #1e293b;
+  --cyber-orange-light: rgba(234, 88, 12, 0.16);
+  --cyber-orange-border: rgba(249, 115, 22, 0.35);
+  --cyber-text-main: #f1f5f9;
+  --cyber-text-muted: #94a3b8;
+  --cyber-text-subtle: #64748b;
+  background-color: #0b1120;
+  color: #f1f5f9;
+}
+
+body.theme-dark .cyber-app-shell,
+body.theme-dark .auth-fullscreen-container {
+  background-color: #0b1120;
+  background-image:
+    radial-gradient(ellipse 60% 40% at 20% 10%, rgba(249, 115, 22, 0.12), transparent 70%),
+    radial-gradient(ellipse 50% 50% at 80% 90%, rgba(255, 107, 0, 0.08), transparent 70%);
+  color: #f1f5f9;
+}
+
+body.theme-dark .cyber-navbar {
+  background: rgba(15, 23, 42, 0.92);
+  border-bottom-color: #1e293b;
+}
+
+body.theme-dark .brand-title,
+body.theme-dark .chat-title-row h3,
+body.theme-dark .ad-title,
+body.theme-dark .modal-title-row h3,
+body.theme-dark .modal-body strong,
+body.theme-dark .report-label,
+body.theme-dark .auth-main-heading,
+body.theme-dark .auth-checkbox-text strong,
+body.theme-dark .notice-inner {
+  color: #f8fafc;
+}
+
+body.theme-dark .nav-pill {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+body.theme-dark .nav-pill:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+body.theme-dark .live-online-pill,
+body.theme-dark .nav-user-pill,
+body.theme-dark .nav-icon-circle-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+body.theme-dark .nav-icon-circle-btn:hover {
+  background: #334155;
+  color: var(--cyber-orange-bright);
+  border-color: var(--cyber-orange);
+}
+
+body.theme-dark .cyber-chat-panel-card,
+body.theme-dark .chat-messages-container,
+body.theme-dark .cyber-controls-dock,
+body.theme-dark .cyber-ad-card,
+body.theme-dark .modal-card,
+body.theme-dark .auth-card-cyber,
+body.theme-dark .cyber-notice-toast {
+  background: #111827;
+  border-color: #1e293b;
+  color: #f1f5f9;
+}
+
+body.theme-dark .chat-header,
+body.theme-dark .chat-input-row,
+body.theme-dark .modal-footer,
+body.theme-dark .auth-feature-item,
+body.theme-dark .auth-age-check-label {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #cbd5e1;
+}
+
+body.theme-dark .chat-input-row input,
+body.theme-dark .report-select-input,
+body.theme-dark .report-text-input {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+body.theme-dark .chat-bubble-stranger {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+body.theme-dark .chat-bubble-system {
+  background: rgba(234, 88, 12, 0.16);
+  border-color: rgba(249, 115, 22, 0.35);
+  color: #fdba74;
+}
+
+body.theme-dark .dock-circle-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+body.theme-dark .dock-circle-btn:hover {
+  background: #334155;
+  border-color: var(--cyber-orange);
+  color: var(--cyber-orange-bright);
+}
+
+body.theme-dark .dock-circle-btn.control-btn-muted {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+body.theme-dark .dock-circle-btn.control-btn-active {
+  background: linear-gradient(135deg, #ff781f 0%, #ea580c 100%);
+  border-color: #ea580c;
+  color: #ffffff;
+}
+
+body.theme-dark .ad-desc,
+body.theme-dark .modal-body,
+body.theme-dark .auth-sub-heading {
+  color: #cbd5e1;
+}
+
+body.theme-dark .btn-secondary {
+  background: #1e293b;
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+body.theme-dark .btn-outline {
+  color: #f1f5f9;
+  border-color: #334155;
 }

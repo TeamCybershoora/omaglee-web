@@ -101,11 +101,32 @@ export function closeModals(el: DOMElements): void {
   if (el.aboutModal) el.aboutModal.style.display = 'none';
 }
 
-export function toggleTheme(state: AppState): void {
-  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+const SUN_ICON_SVG =
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
+
+const MOON_ICON_SVG =
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+
+export function applyTheme(state: AppState, el?: DOMElements): void {
   document.body.className = `theme-${state.theme}`;
   const shell = document.querySelector('.cyber-app-shell');
   if (shell) shell.className = `cyber-app-shell theme-${state.theme}`;
+  const authShell = document.getElementById('auth-screen');
+  if (authShell) authShell.className = `auth-fullscreen-container theme-${state.theme}`;
+
+  const buttons = el?.themeToggles || (document.querySelectorAll('.theme-toggle-btn') as NodeListOf<HTMLElement>);
+  buttons.forEach(btn => {
+    btn.innerHTML = state.theme === 'dark' ? SUN_ICON_SVG : MOON_ICON_SVG;
+    btn.title = state.theme === 'dark' ? 'Switch to Day Mode' : 'Switch to Night Mode';
+  });
+}
+
+export function toggleTheme(state: AppState, el?: DOMElements): void {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  try {
+    localStorage.setItem('omaglee_theme', state.theme);
+  } catch {}
+  applyTheme(state, el);
 }
 
 export function setCallState(state: AppState, el: DOMElements, newState: CallState): void {

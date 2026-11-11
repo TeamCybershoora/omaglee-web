@@ -5,7 +5,7 @@
 
 import { AppState, DOMElements, MatchData } from './types';
 import { API_URL } from './config';
-import { getDOMElements, showToast, closeModals, toggleTheme, setCallState } from './services/ui';
+import { getDOMElements, showToast, closeModals, toggleTheme, applyTheme, setCallState } from './services/ui';
 import { startLocalPreview, toggleAudio, toggleVideo, toggleScreenShare } from './services/media';
 import { updateAuthView, updateGoogleBtnState, handleLogout } from './services/auth';
 import { handleStartChatting, handleNextStranger, handleStopCall, stopPolling, stopHeartbeat, stopWaitingTimer } from './services/matchmaking';
@@ -39,12 +39,13 @@ export class OmagleeApp {
       heartbeatTimer: null,
       sigPollTimer: null,
       processedMsgIds: new Set<string>(),
-      theme: 'light'
+      theme: localStorage.getItem('omaglee_theme') === 'dark' ? 'dark' : 'light'
     };
   }
 
   public init(): void {
     this.el = getDOMElements();
+    applyTheme(this.state, this.el);
     this.setupEventListeners();
     this.registerUnloadCleanup();
     updateAuthView(this.state, this.el);
@@ -161,7 +162,7 @@ export class OmagleeApp {
     if (el.doneAboutBtn) el.doneAboutBtn.addEventListener('click', () => closeModals(el));
 
     // Theme Toggle
-    el.themeToggles.forEach(btn => btn.addEventListener('click', () => toggleTheme(this.state)));
+    el.themeToggles.forEach(btn => btn.addEventListener('click', () => toggleTheme(this.state, el)));
 
     // Toast Dismiss
     if (el.toastClose) el.toastClose.addEventListener('click', () => { if (el.toast) el.toast.style.display = 'none'; });

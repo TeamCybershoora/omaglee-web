@@ -218,9 +218,26 @@ export async function toggleScreenShare(state: AppState, el: DOMElements): Promi
 }
 
 export function updateMediaButtonStates(state: AppState, el: DOMElements): void {
-  if (el.micBtn) el.micBtn.classList.toggle('control-btn-muted', state.isAudioMuted);
-  if (el.camBtn) el.camBtn.classList.toggle('control-btn-muted', state.isVideoMuted);
-  if (el.localMicBtn) el.localMicBtn.classList.toggle('active', state.isAudioMuted);
-  if (el.localCamBtn) el.localCamBtn.classList.toggle('active', state.isVideoMuted);
-  if (el.screenBtn) el.screenBtn.classList.toggle('control-btn-active', state.isScreenSharing);
+  if (el.micBtn) {
+    el.micBtn.classList.toggle('control-btn-muted', state.isAudioMuted);
+    el.micBtn.title = state.isAudioMuted ? 'Unmute Microphone' : 'Mute Microphone';
+  }
+  if (el.camBtn) {
+    el.camBtn.classList.toggle('control-btn-muted', state.isVideoMuted);
+    el.camBtn.title = state.isVideoMuted ? 'Turn On Camera' : 'Turn Off Camera';
+  }
+  if (el.localMicBtn) {
+    el.localMicBtn.classList.toggle('active', state.isAudioMuted);
+    el.localMicBtn.classList.toggle('control-btn-muted', state.isAudioMuted);
+    el.localMicBtn.title = state.isAudioMuted ? 'Unmute Microphone' : 'Mute Microphone';
+  }
+  if (el.localCamBtn) {
+    el.localCamBtn.classList.toggle('active', state.isVideoMuted);
+    el.localCamBtn.classList.toggle('control-btn-muted', state.isVideoMuted);
+    el.localCamBtn.title = state.isVideoMuted ? 'Turn On Camera' : 'Turn Off Camera';
+  }
+  if (el.screenBtn) {
+    el.screenBtn.classList.toggle('control-btn-active', state.isScreenSharing);
+    el.screenBtn.title = state.isScreenSharing ? 'Stop Screen Share' : 'Share Screen';
+  }
 }
