@@ -6,21 +6,48 @@ import { AppState, DOMElements, MatchData, SignalingMessage } from '../types';
 import { API_URL, DEFAULT_ICE_SERVERS } from '../config';
 import { setCallState, showToast } from './ui';
 import { startHeartbeat, stopWaitingTimer, stopPolling } from './matchmaking';
+import { startLocalPreview } from './media';
 
 // Queue for ICE candidates arriving before remote description is set
 let pendingCandidates: RTCIceCandidateInit[] = [];
+let disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
 
-export function connectMatchedStranger(
+async function fetchIceServers(state: AppState): Promise<RTCIceServer[]> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${API_URL}/webrtc/ice-config`, {
+      headers: state.sessionUuid ? { 'X-Session-UUID': state.sessionUuid } : {},
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+        return data.iceServers;
+      }
+    }
+  } catch {
+    // Fallback cleanly to default STUN servers
+  }
+  return DEFAULT_ICE_SERVERS;
+}
+
+export async function connectMatchedStranger(
   state: AppState,
   el: DOMElements,
   matchData: MatchData,
   appendChatMessage: (sender: string, text: string) => void,
   clearChatMessages: () => void,
   onDisconnect: () => void
-): void {
+): Promise<void> {
   state.activeMatch = matchData;
   state.processedMsgIds.clear();
   pendingCandidates = [];
+  if (disconnectGraceTimer) {
+    clearTimeout(disconnectGraceTimer);
+    disconnectGraceTimer = null;
+  }
 
   stopWaitingTimer(state);
   stopPolling(state);
@@ -31,20 +58,53 @@ export function connectMatchedStranger(
 
   startHeartbeat(state);
 
+  // Wait briefly for camera/virtual stream & ICE config before building offer/answer
+  const mediaPromise = state.localStream
+    ? Promise.resolve()
+    : Promise.race([
+        startLocalPreview(state, el).catch(() => {}),
+        new Promise<void>((resolve) => setTimeout(resolve, 2500))
+      ]);
+
+  const [iceServers] = await Promise.all([fetchIceServers(state), mediaPromise]);
+
+  // User may have cancelled while waiting for ICE/media
+  if (!state.activeMatch || state.activeMatch.matchId !== matchData.matchId) {
+    return;
+  }
+
   const config: RTCConfiguration = {
-    iceServers: DEFAULT_ICE_SERVERS,
+    iceServers,
     iceTransportPolicy: state.privacyMode ? 'relay' : 'all'
   };
 
   const pc = new RTCPeerConnection(config);
   state.peerConnection = pc;
 
-  // Connection state change listener
+  // Connection state change listener with grace period on transient 'disconnected'
   pc.onconnectionstatechange = () => {
     console.log('[WebRTC] Connection state:', pc.connectionState);
     if (pc.connectionState === 'connected') {
+      if (disconnectGraceTimer) {
+        clearTimeout(disconnectGraceTimer);
+        disconnectGraceTimer = null;
+      }
       setCallState(state, el, 'CONNECTED');
-    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+    } else if (pc.connectionState === 'disconnected') {
+      if (!disconnectGraceTimer) {
+        disconnectGraceTimer = setTimeout(() => {
+          disconnectGraceTimer = null;
+          if (state.peerConnection === pc && (pc.connectionState === 'disconnected' || pc.connectionState === 'failed')) {
+            showToast(el, 'Connection lost with stranger.', 'neutral');
+            onDisconnect();
+          }
+        }, 4000);
+      }
+    } else if (pc.connectionState === 'failed') {
+      if (disconnectGraceTimer) {
+        clearTimeout(disconnectGraceTimer);
+        disconnectGraceTimer = null;
+      }
       showToast(el, 'Connection lost with stranger.', 'neutral');
       onDisconnect();
     }
@@ -64,6 +124,14 @@ export function connectMatchedStranger(
       state.remoteStream = event.streams[0];
       if (el.remoteVideo) {
         el.remoteVideo.srcObject = event.streams[0];
+      }
+    } else {
+      if (!state.remoteStream) {
+        state.remoteStream = new MediaStream();
+      }
+      state.remoteStream.addTrack(event.track);
+      if (el.remoteVideo) {
+        el.remoteVideo.srcObject = state.remoteStream;
       }
     }
     setCallState(state, el, 'CONNECTED');
@@ -154,13 +222,22 @@ export function stopSignalingPoll(state: AppState): void {
 
 export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnect: () => void): void {
   stopSignalingPoll(state);
+  let isPolling = false;
+
   state.sigPollTimer = setInterval(async () => {
     if (!state.activeMatch?.matchId || !state.peerConnection) return;
+    if (isPolling) return;
+    isPolling = true;
 
     try {
       const res = await fetch(
         `${API_URL}/signaling/messages?matchId=${state.activeMatch.matchId}&participantId=${state.activeMatch.participantId}&participantToken=${state.activeMatch.participantToken}`
       );
+      if (res.status === 404 || res.status === 410) {
+        onDisconnect();
+        return;
+      }
+
       const data = await res.json();
       const messages: SignalingMessage[] = data.messages || [];
 
@@ -171,8 +248,15 @@ export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnec
 
         await handleIncomingSignalingMessage(state, el, msg, onDisconnect);
       }
+
+      if (data.status === 'ended' && state.activeMatch) {
+        showToast(el, 'Stranger disconnected or stopped call.');
+        onDisconnect();
+      }
     } catch {
       // transient network poll drop
+    } finally {
+      isPolling = false;
     }
   }, 600);
 }
@@ -245,6 +329,10 @@ export async function handleIncomingSignalingMessage(
 export function closePeerConnection(state: AppState, el: DOMElements): void {
   stopSignalingPoll(state);
   pendingCandidates = [];
+  if (disconnectGraceTimer) {
+    clearTimeout(disconnectGraceTimer);
+    disconnectGraceTimer = null;
+  }
 
   if (state.dataChannel) {
     try { state.dataChannel.close(); } catch {}

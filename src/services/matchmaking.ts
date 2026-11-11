@@ -7,9 +7,19 @@ import { API_URL } from '../config';
 import { setCallState, showToast } from './ui';
 import { startLocalPreview } from './media';
 
-export async function ensureSession(state: AppState): Promise<{ sessionUuid: string; sessionToken: string }> {
-  if (state.sessionUuid && state.sessionToken) {
+export function clearSessionCredentials(state: AppState): void {
+  state.sessionUuid = null;
+  state.sessionToken = null;
+  localStorage.removeItem('omaglee_session_uuid');
+  localStorage.removeItem('omaglee_session_token');
+}
+
+export async function ensureSession(state: AppState, forceRefresh = false): Promise<{ sessionUuid: string; sessionToken: string }> {
+  if (!forceRefresh && state.sessionUuid && state.sessionToken) {
     return { sessionUuid: state.sessionUuid, sessionToken: state.sessionToken };
+  }
+  if (forceRefresh) {
+    clearSessionCredentials(state);
   }
   const res = await fetch(`${API_URL}/matchmaking/session`, {
     method: 'POST',
@@ -22,6 +32,47 @@ export async function ensureSession(state: AppState): Promise<{ sessionUuid: str
   localStorage.setItem('omaglee_session_uuid', data.sessionUuid);
   localStorage.setItem('omaglee_session_token', data.sessionToken);
   return data;
+}
+
+async function enqueueWithRecovery(state: AppState): Promise<{ ok: boolean; status: number; data: any }> {
+  await ensureSession(state);
+
+  const postQueue = async () => {
+    const res = await fetch(`${API_URL}/matchmaking/queue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-UUID': state.sessionUuid || '',
+        'X-Session-Token': state.sessionToken || ''
+      }
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  };
+
+  let result = await postQueue();
+
+  // Recover transparently from server restart / expired session (401)
+  if (result.status === 401) {
+    await ensureSession(state, true);
+    result = await postQueue();
+  }
+
+  // Recover transparently from lingering match from closed/refreshed tab (409)
+  if (result.status === 409 && result.data?.error === 'already_in_match') {
+    await fetch(`${API_URL}/matchmaking/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-UUID': state.sessionUuid || '',
+        'X-Session-Token': state.sessionToken || ''
+      },
+      body: JSON.stringify({ matchId: result.data.matchId })
+    }).catch(() => {});
+    result = await postQueue();
+  }
+
+  return result;
 }
 
 export function startWaitingTimer(state: AppState, el: DOMElements): void {
@@ -90,16 +141,10 @@ export async function handleStartChatting(
   }
 
   try {
-    await ensureSession(state);
-    const res = await fetch(`${API_URL}/matchmaking/queue`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-UUID': state.sessionUuid || '',
-        'X-Session-Token': state.sessionToken || ''
-      }
-    });
-    const data = await res.json();
+    const { ok, data } = await enqueueWithRecovery(state);
+    if (!ok) {
+      throw new Error(data?.message || 'Unable to enter matchmaking queue.');
+    }
 
     if (data.status === 'matched' && data.matchId && data.role) {
       stopWaitingTimer(state);
@@ -107,11 +152,11 @@ export async function handleStartChatting(
     } else {
       startPollingQueue(state, el, connectMatchedStranger);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Queue error:', err);
     stopWaitingTimer(state);
     setCallState(state, el, 'IDLE');
-    showToast(el, 'Unable to connect to matchmaking server. Please retry.', 'error');
+    showToast(el, err?.message || 'Unable to connect to matchmaking server. Please retry.', 'error');
   }
 }
 
@@ -121,12 +166,16 @@ export function startPollingQueue(
   connectMatchedStranger: (matchData: MatchData) => void
 ): void {
   stopPolling(state);
+  let isPolling = false;
+
   state.pollTimer = setInterval(async () => {
     // If user stopped or match already connected, stop polling
     if (state.callState !== 'SEARCHING') {
       stopPolling(state);
       return;
     }
+    if (isPolling) return;
+    isPolling = true;
 
     try {
       const res = await fetch(`${API_URL}/matchmaking/status`, {
@@ -135,14 +184,26 @@ export function startPollingQueue(
           'X-Session-Token': state.sessionToken || ''
         }
       });
-      const data = await res.json();
+
+      // Recover seamlessly if session expired or backend restarted mid-search
+      if (res.status === 401) {
+        const { ok, data } = await enqueueWithRecovery(state);
+        if (ok && data.status === 'matched' && data.matchId && data.role) {
+          stopPolling(state);
+          stopWaitingTimer(state);
+          connectMatchedStranger(data);
+        }
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
 
       if (data.status === 'matched' && data.matchId && data.role) {
         stopPolling(state);
         stopWaitingTimer(state);
         connectMatchedStranger(data);
-      } else if (data.status === 'idle') {
-        // Queue search expired on server
+      } else if (data.status === 'idle' || data.status === 'expired') {
+        // Queue search expired on server -> stop searching cleanly
         stopPolling(state);
         stopWaitingTimer(state);
         setCallState(state, el, 'IDLE');
@@ -150,6 +211,8 @@ export function startPollingQueue(
       }
     } catch (err) {
       console.warn('Status poll error:', err);
+    } finally {
+      isPolling = false;
     }
   }, 1500);
 }
@@ -165,7 +228,7 @@ export async function handleNextStranger(
   closePeerConnection();
 
   if (state.activeMatch?.matchId && state.sessionUuid && state.sessionToken) {
-    fetch(`${API_URL}/matchmaking/leave`, {
+    await fetch(`${API_URL}/matchmaking/leave`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -181,16 +244,10 @@ export async function handleNextStranger(
   startWaitingTimer(state, el);
 
   try {
-    await ensureSession(state);
-    const res = await fetch(`${API_URL}/matchmaking/queue`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-UUID': state.sessionUuid || '',
-        'X-Session-Token': state.sessionToken || ''
-      }
-    });
-    const data = await res.json();
+    const { ok, data } = await enqueueWithRecovery(state);
+    if (!ok) {
+      throw new Error(data?.message || 'Could not search for next stranger.');
+    }
 
     if (data.status === 'matched' && data.matchId && data.role) {
       stopWaitingTimer(state);
@@ -198,10 +255,10 @@ export async function handleNextStranger(
     } else {
       startPollingQueue(state, el, connectMatchedStranger);
     }
-  } catch {
+  } catch (err: any) {
     stopWaitingTimer(state);
     setCallState(state, el, 'IDLE');
-    showToast(el, 'Could not search for next stranger. Try again.', 'error');
+    showToast(el, err?.message || 'Could not search for next stranger. Try again.', 'error');
   }
 }
 

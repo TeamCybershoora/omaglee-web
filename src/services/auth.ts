@@ -131,6 +131,10 @@ export function decodeJwtFallback(state: AppState, el: DOMElements, credential: 
       email: payload.email,
       picture: payload.picture || ''
     };
+    localStorage.removeItem('omaglee_session_uuid');
+    localStorage.removeItem('omaglee_session_token');
+    state.sessionUuid = null;
+    state.sessionToken = null;
     localStorage.setItem('omaglee_user', JSON.stringify(user));
     updateAuthView(state, el);
   } catch {

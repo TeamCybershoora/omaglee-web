@@ -4,6 +4,7 @@
  */
 
 import { AppState, DOMElements, MatchData } from './types';
+import { API_URL } from './config';
 import { getDOMElements, showToast, closeModals, toggleTheme } from './services/ui';
 import { startLocalPreview, toggleAudio, toggleVideo, toggleScreenShare } from './services/media';
 import { updateAuthView, updateGoogleBtnState, handleLogout } from './services/auth';
@@ -45,7 +46,33 @@ export class OmagleeApp {
   public init(): void {
     this.el = getDOMElements();
     this.setupEventListeners();
+    this.registerUnloadCleanup();
     updateAuthView(this.state, this.el);
+  }
+
+  private registerUnloadCleanup(): void {
+    window.addEventListener('beforeunload', () => {
+      const { sessionUuid, sessionToken, activeMatch, callState } = this.state;
+      if (!sessionUuid || !sessionToken) return;
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-Session-UUID': sessionUuid,
+        'X-Session-Token': sessionToken
+      };
+
+      if (callState === 'SEARCHING') {
+        fetch(`${API_URL}/matchmaking/cancel`, { method: 'POST', headers, keepalive: true }).catch(() => {});
+      }
+      if (activeMatch?.matchId) {
+        fetch(`${API_URL}/matchmaking/leave`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ matchId: activeMatch.matchId }),
+          keepalive: true
+        }).catch(() => {});
+      }
+    });
   }
 
   private setupEventListeners(): void {
