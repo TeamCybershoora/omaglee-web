@@ -136,32 +136,83 @@ export function toggleVideo(state: AppState, el: DOMElements): void {
   updateMediaButtonStates(state, el);
 }
 
+async function replaceOutgoingTracks(state: AppState, stream: MediaStream | null): Promise<void> {
+  if (!state.peerConnection || !stream) return;
+  const senders = state.peerConnection.getSenders();
+  const videoTrack = stream.getVideoTracks()[0];
+  const audioTrack = stream.getAudioTracks()[0];
+
+  if (videoTrack) {
+    const videoSender = senders.find(s => s.track?.kind === 'video');
+    if (videoSender) {
+      await videoSender.replaceTrack(videoTrack).catch(err => console.warn('replaceTrack(video) failed:', err));
+    }
+  }
+  if (audioTrack) {
+    const audioSender = senders.find(s => s.track?.kind === 'audio');
+    if (audioSender) {
+      await audioSender.replaceTrack(audioTrack).catch(err => console.warn('replaceTrack(audio) failed:', err));
+    }
+  }
+}
+
+async function stopScreenShare(state: AppState, el: DOMElements): Promise<void> {
+  if (!state.isScreenSharing) return;
+  state.isScreenSharing = false;
+
+  if (state.localStream) {
+    state.localStream.getTracks().forEach(t => {
+      t.onended = null;
+      t.stop();
+    });
+    state.localStream = null;
+  }
+
+  await startLocalPreview(state, el);
+
+  // Restore mute flags on newly created camera stream
+  if (state.localStream) {
+    state.localStream.getAudioTracks().forEach(t => { t.enabled = !state.isAudioMuted; });
+    state.localStream.getVideoTracks().forEach(t => { t.enabled = !state.isVideoMuted; });
+  }
+
+  await replaceOutgoingTracks(state, state.localStream);
+  updateMediaButtonStates(state, el);
+  showToast(el, 'Switched back to camera feed.');
+}
+
 export async function toggleScreenShare(state: AppState, el: DOMElements): Promise<void> {
   if (state.isScreenSharing) {
-    await startLocalPreview(state, el);
-    state.isScreenSharing = false;
-    showToast(el, 'Switched back to camera feed.');
-  } else {
-    try {
-      if (navigator.mediaDevices?.getDisplayMedia) {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        state.localStream = displayStream;
-        if (el.localVideo) el.localVideo.srcObject = displayStream;
-        state.isScreenSharing = true;
+    await stopScreenShare(state, el);
+    return;
+  }
 
-        if (state.peerConnection) {
-          const sender = state.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-          if (sender) sender.replaceTrack(displayStream.getVideoTracks()[0]);
-        }
+  try {
+    if (!navigator.mediaDevices?.getDisplayMedia) return;
+    const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const screenVideoTrack = displayStream.getVideoTracks()[0];
+    if (!screenVideoTrack) return;
 
-        displayStream.getVideoTracks()[0].onended = () => {
-          toggleScreenShare(state, el);
-        };
-        showToast(el, 'Screen sharing active.');
-      }
-    } catch {
-      // User cancelled picker
+    // Preserve existing mic audio tracks, stop old video tracks
+    const preservedAudioTracks: MediaStreamTrack[] = [];
+    if (state.localStream) {
+      state.localStream.getVideoTracks().forEach(t => t.stop());
+      preservedAudioTracks.push(...state.localStream.getAudioTracks());
     }
+
+    const nextStream = new MediaStream([screenVideoTrack, ...preservedAudioTracks]);
+    state.localStream = nextStream;
+    if (el.localVideo) el.localVideo.srcObject = nextStream;
+    state.isScreenSharing = true;
+
+    await replaceOutgoingTracks(state, nextStream);
+
+    screenVideoTrack.onended = () => {
+      stopScreenShare(state, el).catch(() => {});
+    };
+    showToast(el, 'Screen sharing active.');
+  } catch {
+    // User cancelled picker
   }
   updateMediaButtonStates(state, el);
 }

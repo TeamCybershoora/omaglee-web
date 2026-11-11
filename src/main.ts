@@ -5,10 +5,10 @@
 
 import { AppState, DOMElements, MatchData } from './types';
 import { API_URL } from './config';
-import { getDOMElements, showToast, closeModals, toggleTheme } from './services/ui';
+import { getDOMElements, showToast, closeModals, toggleTheme, setCallState } from './services/ui';
 import { startLocalPreview, toggleAudio, toggleVideo, toggleScreenShare } from './services/media';
 import { updateAuthView, updateGoogleBtnState, handleLogout } from './services/auth';
-import { handleStartChatting, handleNextStranger, handleStopCall } from './services/matchmaking';
+import { handleStartChatting, handleNextStranger, handleStopCall, stopPolling, stopHeartbeat, stopWaitingTimer } from './services/matchmaking';
 import { connectMatchedStranger, closePeerConnection } from './services/webrtc';
 import { clearChatMessages, appendChatMessage, handleSendChatMessage } from './services/chat';
 import { handleSubmitReport, handleBlockStranger } from './services/moderation';
@@ -199,8 +199,25 @@ export class OmagleeApp {
       matchData,
       (sender, text) => appendChatMessage(this.el, sender, text),
       () => clearChatMessages(this.el),
-      () => this.stopCall()
+      (reason: string) => this.handleRemoteMatchEnded(reason)
     );
+  }
+
+  private handleRemoteMatchEnded(reason: string): void {
+    if (!this.state.activeMatch && this.state.callState === 'IDLE') return;
+    stopPolling(this.state);
+    stopHeartbeat(this.state);
+    stopWaitingTimer(this.state);
+    closePeerConnection(this.state, this.el);
+    this.state.activeMatch = null;
+
+    if (reason === 'next') {
+      showToast(this.el, 'Stranger skipped. Searching for next connection...', 'neutral');
+      this.startChatting();
+    } else {
+      setCallState(this.state, this.el, 'IDLE');
+      showToast(this.el, 'Call ended. Click Start Call to connect again.');
+    }
   }
 
   private togglePrivacyMode(): void {

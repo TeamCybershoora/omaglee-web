@@ -39,7 +39,7 @@ export async function connectMatchedStranger(
   matchData: MatchData,
   appendChatMessage: (sender: string, text: string) => void,
   clearChatMessages: () => void,
-  onDisconnect: () => void
+  onMatchEnded: (reason: string) => void
 ): Promise<void> {
   state.activeMatch = matchData;
   state.processedMsgIds.clear();
@@ -95,8 +95,7 @@ export async function connectMatchedStranger(
         disconnectGraceTimer = setTimeout(() => {
           disconnectGraceTimer = null;
           if (state.peerConnection === pc && (pc.connectionState === 'disconnected' || pc.connectionState === 'failed')) {
-            showToast(el, 'Connection lost with stranger.', 'neutral');
-            onDisconnect();
+            onMatchEnded('disconnect');
           }
         }, 4000);
       }
@@ -105,8 +104,7 @@ export async function connectMatchedStranger(
         clearTimeout(disconnectGraceTimer);
         disconnectGraceTimer = null;
       }
-      showToast(el, 'Connection lost with stranger.', 'neutral');
-      onDisconnect();
+      onMatchEnded('disconnect');
     }
   };
 
@@ -167,7 +165,7 @@ export async function connectMatchedStranger(
     };
   }
 
-  startSignalingPoll(state, el, onDisconnect);
+  startSignalingPoll(state, el, onMatchEnded);
 }
 
 export function setupDataChannel(
@@ -177,8 +175,8 @@ export function setupDataChannel(
   appendChatMessage: (sender: string, text: string) => void
 ): void {
   dc.onopen = () => {
-    console.log('[WebRTC] DataChannel open (P2P connected)');
-    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Connected (P2P)';
+    console.log('[WebRTC] DataChannel open');
+    if (el.signalingStatusText) el.signalingStatusText.textContent = 'Connected';
     setCallState(state, el, 'CONNECTED');
   };
   dc.onmessage = (event) => {
@@ -220,7 +218,7 @@ export function stopSignalingPoll(state: AppState): void {
   }
 }
 
-export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnect: () => void): void {
+export function startSignalingPoll(state: AppState, el: DOMElements, onMatchEnded: (reason: string) => void): void {
   stopSignalingPoll(state);
   let isPolling = false;
 
@@ -234,7 +232,7 @@ export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnec
         `${API_URL}/signaling/messages?matchId=${state.activeMatch.matchId}&participantId=${state.activeMatch.participantId}&participantToken=${state.activeMatch.participantToken}`
       );
       if (res.status === 404 || res.status === 410) {
-        onDisconnect();
+        onMatchEnded('user_leave');
         return;
       }
 
@@ -246,12 +244,11 @@ export function startSignalingPoll(state: AppState, el: DOMElements, onDisconnec
         if (msg.id && state.processedMsgIds.has(msg.id)) continue;
         if (msg.id) state.processedMsgIds.add(msg.id);
 
-        await handleIncomingSignalingMessage(state, el, msg, onDisconnect);
+        await handleIncomingSignalingMessage(state, el, msg, onMatchEnded);
       }
 
       if (data.status === 'ended' && state.activeMatch) {
-        showToast(el, 'Stranger disconnected or stopped call.');
-        onDisconnect();
+        onMatchEnded(data.endedReason || 'user_leave');
       }
     } catch {
       // transient network poll drop
@@ -265,7 +262,7 @@ export async function handleIncomingSignalingMessage(
   state: AppState,
   el: DOMElements,
   msg: SignalingMessage,
-  onDisconnect: () => void
+  onMatchEnded: (reason: string) => void
 ): Promise<void> {
   const pc = state.peerConnection;
   if (!pc) return;
@@ -321,8 +318,8 @@ export async function handleIncomingSignalingMessage(
       console.warn('Add ICE candidate error:', err);
     }
   } else if (msg.type === 'leave' || msg.type === 'disconnect' || msg.type === 'match.ended') {
-    showToast(el, 'Stranger disconnected or stopped call.');
-    onDisconnect();
+    const reason = msg.payload?.reason || (msg.type === 'match.ended' ? 'user_leave' : 'disconnect');
+    onMatchEnded(reason);
   }
 }
 
@@ -339,6 +336,9 @@ export function closePeerConnection(state: AppState, el: DOMElements): void {
     state.dataChannel = null;
   }
   if (state.peerConnection) {
+    state.peerConnection.onconnectionstatechange = null;
+    state.peerConnection.ontrack = null;
+    state.peerConnection.onicecandidate = null;
     try { state.peerConnection.close(); } catch {}
     state.peerConnection = null;
   }

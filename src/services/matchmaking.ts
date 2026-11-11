@@ -223,35 +223,46 @@ export async function handleNextStranger(
   closePeerConnection: () => void,
   connectMatchedStranger: (matchData: MatchData) => void
 ): Promise<void> {
+  const prevMatchId = state.activeMatch?.matchId;
+
   stopPolling(state);
   stopHeartbeat(state);
   closePeerConnection();
-
-  if (state.activeMatch?.matchId && state.sessionUuid && state.sessionToken) {
-    await fetch(`${API_URL}/matchmaking/leave`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-UUID': state.sessionUuid,
-        'X-Session-Token': state.sessionToken
-      },
-      body: JSON.stringify({ matchId: state.activeMatch.matchId })
-    }).catch(() => {});
-  }
   state.activeMatch = null;
 
   setCallState(state, el, 'SEARCHING');
   startWaitingTimer(state, el);
 
   try {
-    const { ok, data } = await enqueueWithRecovery(state);
-    if (!ok) {
-      throw new Error(data?.message || 'Could not search for next stranger.');
+    let result: { ok: boolean; data: any } | null = null;
+
+    if (prevMatchId && state.sessionUuid && state.sessionToken) {
+      const nextRes = await fetch(`${API_URL}/matches/${prevMatchId}/next`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-UUID': state.sessionUuid,
+          'X-Session-Token': state.sessionToken
+        }
+      });
+      if (nextRes.ok) {
+        result = { ok: true, data: await nextRes.json() };
+      } else if (nextRes.status === 401) {
+        await ensureSession(state, true);
+      }
     }
 
-    if (data.status === 'matched' && data.matchId && data.role) {
+    if (!result) {
+      result = await enqueueWithRecovery(state);
+    }
+
+    if (!result.ok) {
+      throw new Error(result.data?.message || 'Could not search for next stranger.');
+    }
+
+    if (result.data.status === 'matched' && result.data.matchId && result.data.role) {
       stopWaitingTimer(state);
-      connectMatchedStranger(data);
+      connectMatchedStranger(result.data);
     } else {
       startPollingQueue(state, el, connectMatchedStranger);
     }
